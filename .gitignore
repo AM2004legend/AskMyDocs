@@ -11,3 +11,6 @@ __pycache__/
 # local data (uploads in flight, old prototype index)
 data/
 index/
+
+# graphify output (regenerate with /graphify; commit graph.html separately if you want to share it)
+graphify-out/

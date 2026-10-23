@@ -1,0 +1,4 @@
+# keep the code graph about the code: skip the sample novel, eval run outputs and upload temp files
+samples/
+eval/results/
+data/
