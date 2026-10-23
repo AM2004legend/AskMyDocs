@@ -1,0 +1,24 @@
+[project]
+name = "askmydocs"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["rag.py"]  # original prototype, kept for reference
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+ignore = ["B008"]  # FastAPI-style defaults in signatures
+
+[tool.ruff.lint.per-file-ignores]
+"app/llm/prompts.py" = ["E501"]  # prompt text reads better unwrapped
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "db: needs the Postgres container (docker compose up -d db)",
+    "slow: loads the embedding or OCR model",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
