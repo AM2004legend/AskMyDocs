@@ -1,0 +1,129 @@
+# Evaluation set. Each question is checked for:
+#   route    - did the router pick the expected path? (specific / whole_document / entity)
+#   hit      - did retrieval return an excerpt from expected_locs, or containing an evidence phrase?
+#   refusal  - unanswerable questions must be refused; answerable ones must not be
+#   correct  - (only with --grade) LLM-graded answer vs `expected`, spot-check by hand
+#
+# status: draft  -> written by Claude, NOT yet checked by Aritra. Change to "checked" after review.
+# Chapter labels match the app's citations (ch.N = the book's own chapter number).
+# PRD target: 3 documents (novel, textbook chapter, contract). Only the novel is drafted so far.
+
+documents:
+  pride_and_prejudice.txt:
+    source: samples/pride_and_prejudice.txt   # Project Gutenberg #1342, public domain
+
+questions:
+  # ---------- specific (5) ----------
+  - id: pp-s1
+    document: pride_and_prejudice.txt
+    type: specific
+    question: How much money a year does Mr. Bingley have?
+    expected: Four or five thousand a year.
+    expected_locs: [ch.1]
+    evidence: ["four or five thousand a year"]
+    status: draft
+
+  - id: pp-s2
+    document: pride_and_prejudice.txt
+    type: specific
+    question: Who does Mr. Collins become engaged to after Elizabeth refuses him?
+    expected: Charlotte Lucas, Elizabeth's friend.
+    expected_locs: [ch.22]
+    evidence: []
+    status: draft
+
+  - id: pp-s3
+    document: pride_and_prejudice.txt
+    type: specific
+    question: Where is Elizabeth staying when Mr. Darcy first proposes to her?
+    expected: At the Hunsford parsonage (Mr. Collins's house, near Rosings), visiting Charlotte.
+    expected_locs: [ch.34]
+    evidence: ["In vain have I struggled"]
+    status: draft
+
+  - id: pp-s4
+    document: pride_and_prejudice.txt
+    type: specific
+    question: What does Darcy's letter reveal about Mr. Wickham?
+    expected: >-
+      Wickham gave up the church living for money (about 3000 pounds), wasted it, then tried to
+      elope with Darcy's fifteen-year-old sister Georgiana for her fortune.
+    expected_locs: [ch.35]
+    evidence: ["Be not alarmed, madam"]
+    status: draft
+
+  - id: pp-s5
+    document: pride_and_prejudice.txt
+    type: specific
+    question: Where were Lydia and Wickham at first believed to be going when they ran away?
+    expected: To Gretna Green (Scotland), to marry.
+    expected_locs: [ch.46, ch.47]
+    evidence: ["Gretna Green"]
+    status: draft
+
+  # ---------- whole-document (3) ----------
+  - id: pp-w1
+    document: pride_and_prejudice.txt
+    type: whole_document
+    question: Summarise the story.
+    expected: >-
+      The Bennet sisters' search for marriage; Elizabeth's prejudice against proud Mr. Darcy,
+      his rejected proposal, his letter, her change of heart after Pemberley and his help with
+      Lydia's elopement; ends with Elizabeth marrying Darcy and Jane marrying Bingley.
+    expected_locs: []
+    evidence: []
+    status: draft
+
+  - id: pp-w2
+    document: pride_and_prejudice.txt
+    type: whole_document
+    question: What are the main themes of the novel?
+    expected: Pride and prejudice (first impressions), marriage and money, class and reputation, family.
+    expected_locs: []
+    evidence: []
+    status: draft
+
+  - id: pp-w3
+    document: pride_and_prejudice.txt
+    type: whole_document
+    question: How does the story end?
+    expected: Elizabeth marries Darcy and Jane marries Bingley; Lydia is married to Wickham.
+    expected_locs: [ch.60, ch.61]
+    evidence: []
+    status: draft
+
+  # ---------- entity (2) ----------
+  - id: pp-e1
+    document: pride_and_prejudice.txt
+    type: entity
+    question: Who is Lady Catherine de Bourgh?
+    expected: Mr. Darcy's rich, domineering aunt at Rosings, and Mr. Collins's patroness.
+    expected_locs: [ch.13, ch.14, ch.29]
+    evidence: ["patroness"]
+    status: draft
+
+  - id: pp-e2
+    document: pride_and_prejudice.txt
+    type: entity
+    question: What is the relationship between Mr. Wickham and Mr. Darcy?
+    expected: >-
+      Wickham is the son of old Mr. Darcy's steward and grew up with Darcy; they fell out over
+      the living and Wickham's attempt to elope with Georgiana.
+    expected_locs: [ch.16, ch.35]
+    evidence: []
+    status: draft
+
+  # ---------- unanswerable (2): must be refused ----------
+  - id: pp-u1
+    document: pride_and_prejudice.txt
+    type: unanswerable
+    question: How many children do Elizabeth and Darcy have?
+    expected: REFUSE
+    status: draft
+
+  - id: pp-u2
+    document: pride_and_prejudice.txt
+    type: unanswerable
+    question: What is Mr. Darcy's email address?
+    expected: REFUSE
+    status: draft

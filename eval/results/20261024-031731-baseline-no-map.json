@@ -1,0 +1,234 @@
+{
+  "label": "baseline-no-map",
+  "answers": false,
+  "results": [
+    {
+      "id": "pp-s1",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": false,
+      "refused": false,
+      "best_similarity": 0.5442301306587389,
+      "locs": [
+        "ch.2",
+        "ch.17",
+        "ch.17",
+        "ch.3",
+        "ch.4",
+        "ch.18"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 12480
+    },
+    {
+      "id": "pp-s2",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.6447374052122394,
+      "locs": [
+        "ch.15",
+        "ch.22",
+        "ch.20",
+        "ch.22",
+        "ch.20",
+        "ch.15"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 29
+    },
+    {
+      "id": "pp-s3",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": false,
+      "refused": false,
+      "best_similarity": 0.7066274635043834,
+      "locs": [
+        "ch.59",
+        "ch.59",
+        "ch.53",
+        "ch.16",
+        "ch.18",
+        "ch.43"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 30
+    },
+    {
+      "id": "pp-s4",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": false,
+      "refused": false,
+      "best_similarity": 0.7649166128089077,
+      "locs": [
+        "ch.18",
+        "ch.18",
+        "ch.61",
+        "ch.36",
+        "ch.51",
+        "ch.24"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 27
+    },
+    {
+      "id": "pp-s5",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": false,
+      "refused": false,
+      "best_similarity": 0.7146369218826294,
+      "locs": [
+        "ch.52",
+        "ch.61",
+        "ch.51",
+        "ch.52",
+        "ch.41",
+        "ch.51"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 28
+    },
+    {
+      "id": "pp-w1",
+      "type": "whole_document",
+      "route": "specific",
+      "route_ok": false,
+      "hit": null,
+      "refused": false,
+      "best_similarity": 0.4144570580448481,
+      "locs": [
+        "ch.3",
+        "ch.23",
+        "sec.2",
+        "sec.2",
+        "ch.46",
+        "sec.2"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 27
+    },
+    {
+      "id": "pp-w2",
+      "type": "whole_document",
+      "route": "specific",
+      "route_ok": false,
+      "hit": null,
+      "refused": false,
+      "best_similarity": 0.42838450839427233,
+      "locs": [
+        "sec.2",
+        "sec.2",
+        "sec.2",
+        "ch.14",
+        "sec.2",
+        "ch.42"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 21
+    },
+    {
+      "id": "pp-w3",
+      "type": "whole_document",
+      "route": "specific",
+      "route_ok": false,
+      "hit": false,
+      "refused": false,
+      "best_similarity": 0.3947513589707574,
+      "locs": [
+        "ch.55",
+        "ch.3",
+        "ch.47",
+        "ch.35",
+        "sec.2",
+        "ch.41"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 21
+    },
+    {
+      "id": "pp-e1",
+      "type": "entity",
+      "route": "specific",
+      "route_ok": false,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.718471343653984,
+      "locs": [
+        "ch.16",
+        "ch.14",
+        "ch.29",
+        "ch.14",
+        "ch.18",
+        "ch.29"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 25
+    },
+    {
+      "id": "pp-e2",
+      "type": "entity",
+      "route": "specific",
+      "route_ok": false,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.7695757884040019,
+      "locs": [
+        "ch.18",
+        "ch.18",
+        "ch.52",
+        "ch.16",
+        "ch.24",
+        "ch.35"
+      ],
+      "refusal_ok": true,
+      "latency_ms": 28
+    },
+    {
+      "id": "pp-u1",
+      "type": "unanswerable",
+      "route": "specific",
+      "route_ok": null,
+      "hit": null,
+      "refused": false,
+      "best_similarity": 0.6185052394866943,
+      "locs": [
+        "ch.43",
+        "ch.8",
+        "sec.2",
+        "ch.10",
+        "ch.45",
+        "ch.50"
+      ],
+      "refusal_ok": false,
+      "latency_ms": 27
+    },
+    {
+      "id": "pp-u2",
+      "type": "unanswerable",
+      "route": "specific",
+      "route_ok": null,
+      "hit": null,
+      "refused": false,
+      "best_similarity": 0.5561664369007099,
+      "locs": [
+        "ch.16",
+        "ch.18",
+        "ch.36",
+        "ch.6",
+        "ch.18",
+        "ch.18"
+      ],
+      "refusal_ok": false,
+      "latency_ms": 26
+    }
+  ]
+}
