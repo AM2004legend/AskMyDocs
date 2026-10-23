@@ -102,8 +102,9 @@ def test_upload_builds_sections_chunks_and_map(api, book):
     assert docmap["map_status"] == "ready"
     assert [s["title"] for s in docmap["sections"]] == list(CHAPTERS)
     assert docmap["summary"].startswith("A lighthouse keeper")
+    assert [s["label"] for s in docmap["sections"]] == ["ch.1", "ch.2", "ch.3"]
     harriet = next(e for e in docmap["entities"] if e["name"] == "Harriet Vale")
-    assert harriet["section_ids"] == [1, 2, 3]
+    assert harriet["appears_in"] == ["ch.1", "ch.2", "ch.3"]
 
 
 def test_same_file_twice_is_not_reprocessed(api, book, fake_llm):

@@ -15,6 +15,18 @@ def test_txt_joins_wrapped_lines_into_paragraphs(tmp_path):
     ]
 
 
+def test_txt_strips_gutenberg_licence_and_finds_title(tmp_path):
+    path = tmp_path / "pg.txt"
+    path.write_text(
+        "The Project Gutenberg eBook\n\nTitle: Tiny Book\n\n*** START OF THE PROJECT GUTENBERG EBOOK TINY ***\n\n"
+        "The story.\n\n*** END OF THE PROJECT GUTENBERG EBOOK TINY ***\n\nSection 2. Licence stuff.",
+        "utf-8",
+    )
+    parsed = parse_file(path, "txt")
+    assert parsed.title == "Tiny Book"
+    assert [b.text for b in parsed.blocks] == ["The story."]
+
+
 def test_txt_falls_back_to_cp1252(tmp_path):
     path = tmp_path / "old.txt"
     path.write_bytes("caf\xe9 au lait".encode("cp1252"))

@@ -12,6 +12,7 @@ class Hit:
     page: int | None
     section_ordinal: int | None
     section_title: str | None
+    section_label: str | None = None  # "ch.16" / "sec.2"
     similarity: float | None = None  # cosine similarity, only from vector search
     score: float = 0.0  # fused RRF score
 
@@ -19,12 +20,17 @@ class Hit:
     def loc(self) -> str:
         if self.page is not None:
             return f"p.{self.page}"
+        if self.section_label:
+            return self.section_label
         if self.section_ordinal is not None:
-            return f"ch.{self.section_ordinal}"
+            return f"sec.{self.section_ordinal}"
         return "doc"
 
 
-SELECT = "SELECT c.id AS chunk_id, c.text, c.page, s.ordinal AS section_ordinal, s.title AS section_title"
+SELECT = (
+    "SELECT c.id AS chunk_id, c.text, c.page, s.ordinal AS section_ordinal, s.title AS section_title,"
+    " s.label AS section_label"
+)
 
 
 def _section_filter(section_ordinals: list[int] | None) -> tuple[str, list]:

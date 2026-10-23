@@ -62,7 +62,7 @@ def parse_pdf(path: Path, progress: Progress = _noop) -> ParsedDoc:
     except (PdfReadError, ValueError, NotImplementedError) as exc:
         raise ParseError(f"Could not read this PDF ({exc}). Is it password-protected or damaged?") from exc
 
-    title = (reader.metadata.title if reader.metadata else None) or path.stem
+    title = (reader.metadata.title if reader.metadata else None) or ""
     blocks: list[Block] = []
     ocr_pages = 0
     pdfium_doc = None
@@ -109,7 +109,7 @@ def parse_image(path: Path, progress: Progress = _noop) -> ParsedDoc:
     except UnidentifiedImageError as exc:
         raise ParseError("This file is not a readable image.") from exc
     blocks = [Block(_clean(line), page=1) for line in text.splitlines() if _clean(line)]
-    return ParsedDoc(title=path.stem, blocks=blocks, n_pages=1, ocr_pages=1)
+    return ParsedDoc(title="", blocks=blocks, n_pages=1, ocr_pages=1)
 
 
 # ---------- DOCX ----------
@@ -141,7 +141,7 @@ def parse_docx(path: Path, progress: Progress = _noop) -> ParsedDoc:
             if text:
                 level = _docx_heading_level(item.style.name if item.style else "")
                 blocks.append(Block(text, level=level))
-    title = document.core_properties.title or path.stem
+    title = document.core_properties.title or ""
     return ParsedDoc(title=title, blocks=blocks)
 
 
@@ -183,7 +183,7 @@ def parse_epub(path: Path, progress: Progress = _noop) -> ParsedDoc:
         blocks.extend(item_blocks)
 
     titles = book.get_metadata("DC", "title")
-    title = titles[0][0] if titles else path.stem
+    title = titles[0][0] if titles else ""
     return ParsedDoc(title=title, blocks=blocks)
 
 
@@ -202,12 +202,25 @@ def _read_text_file(path: Path) -> str:
     return _decode(path.read_bytes()).replace("\r\n", "\n").replace("\r", "\n")
 
 
+GUTENBERG_START_RE = re.compile(r"^\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG.*$", re.MULTILINE | re.IGNORECASE)
+GUTENBERG_END_RE = re.compile(r"^\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG.*$", re.MULTILINE | re.IGNORECASE)
+
+
+def _strip_gutenberg(text: str) -> tuple[str, str]:
+    """Project Gutenberg files wrap the book in licence text; keep only the book. Returns (text, title)."""
+    start, end = GUTENBERG_START_RE.search(text), GUTENBERG_END_RE.search(text)
+    if not (start and end and start.end() < end.start()):
+        return text, ""
+    title = re.search(r"^Title:\s*(.+)$", text[: start.start()], re.MULTILINE)
+    return text[start.end() : end.start()], title.group(1).strip() if title else ""
+
+
 def parse_txt(path: Path, progress: Progress = _noop) -> ParsedDoc:
     progress("Reading text")
-    text = _read_text_file(path)
+    text, title = _strip_gutenberg(_read_text_file(path))
     # paragraphs are separated by blank lines; hard-wrapped lines inside a paragraph get joined
     blocks = [Block(_clean(p.replace("\n", " "))) for p in re.split(r"\n\s*\n", text)]
-    return ParsedDoc(title=path.stem, blocks=[b for b in blocks if b.text])
+    return ParsedDoc(title=title, blocks=[b for b in blocks if b.text])
 
 
 def parse_md(path: Path, progress: Progress = _noop) -> ParsedDoc:
@@ -230,7 +243,7 @@ def parse_md(path: Path, progress: Progress = _noop) -> ParsedDoc:
         else:
             paragraph.append(line.strip())
     flush()
-    return ParsedDoc(title=path.stem, blocks=[b for b in blocks if b.text])
+    return ParsedDoc(title="", blocks=[b for b in blocks if b.text])
 
 
 PARSERS = {

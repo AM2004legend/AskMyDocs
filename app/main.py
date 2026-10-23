@@ -144,8 +144,8 @@ def document_map(doc_id: int):
     doc = _get_doc(doc_id)
     with db.get_pool().connection() as conn:
         sections = conn.execute(
-            "SELECT ordinal, title, page_start, page_end, n_words, summary FROM sections"
-            " WHERE document_id = %s ORDER BY ordinal",
+            "SELECT ordinal, COALESCE(label, 'sec.' || ordinal) AS label, title, page_start, page_end, n_words,"
+            " summary FROM sections WHERE document_id = %s ORDER BY ordinal",
             [doc_id],
         ).fetchall()
         entities = conn.execute(
@@ -154,6 +154,9 @@ def document_map(doc_id: int):
             [doc_id],
         ).fetchall()
         summary = conn.execute("SELECT summary FROM doc_summary WHERE document_id = %s", [doc_id]).fetchone()
+    labels = {s["ordinal"]: s["label"] for s in sections}
+    for e in entities:  # show "ch.16" style labels, not internal ordinals
+        e["appears_in"] = [labels.get(n, f"sec.{n}") for n in e["section_ids"]]
     return {
         "map_status": doc["map_status"],
         "progress": doc["progress"],

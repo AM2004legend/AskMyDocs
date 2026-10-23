@@ -15,7 +15,7 @@ from app.db import get_pool
 from app.embeddings import embed
 from app.ingest.chunker import chunk_blocks
 from app.ingest.parsers import ParseError, parse_file
-from app.ingest.sections import split_sections
+from app.ingest.sections import section_labels, split_sections
 
 log = logging.getLogger(__name__)
 UPLOAD_DIR = Path("data") / "uploads"
@@ -85,11 +85,12 @@ def _ingest(doc_id: int, path: Path, file_type: str) -> None:
         conn.execute("DELETE FROM sections WHERE document_id = %s", [doc_id])  # cascades to chunks
         conn.execute("DELETE FROM chunks WHERE document_id = %s", [doc_id])
         section_ids = []
+        labels = section_labels(sections)
         for ordinal, s in enumerate(sections, start=1):
             row = conn.execute(
-                "INSERT INTO sections (document_id, ordinal, title, number, page_start, page_end, n_words, text)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                [doc_id, ordinal, s.title, s.number, s.page_start, s.page_end, s.n_words, s.text],
+                "INSERT INTO sections (document_id, ordinal, label, title, number, page_start, page_end, n_words, text)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                [doc_id, ordinal, labels[ordinal - 1], s.title, s.number, s.page_start, s.page_end, s.n_words, s.text],
             ).fetchone()
             section_ids.append(row["id"])
         with conn.cursor() as cur:
@@ -102,8 +103,9 @@ def _ingest(doc_id: int, path: Path, file_type: str) -> None:
                 ],
             )
         conn.execute(
-            "UPDATE documents SET title = %s, n_pages = %s, ocr_pages = %s, status = 'ready',"
-            " progress = NULL, error = NULL WHERE id = %s",
+            # parsers return "" when the file has no real title; then keep the original filename
+            "UPDATE documents SET title = COALESCE(NULLIF(%s, ''), title), n_pages = %s, ocr_pages = %s,"
+            " status = 'ready', progress = NULL, error = NULL WHERE id = %s",
             [parsed.title[:300], parsed.n_pages, parsed.ocr_pages, doc_id],
         )
 

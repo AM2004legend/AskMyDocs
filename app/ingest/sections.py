@@ -148,6 +148,19 @@ def _fallback(blocks: list[Block]) -> list[Section]:
     return _merge_tiny(sections)
 
 
+def section_labels(sections: list[Section]) -> list[str]:
+    """Citation labels: the real chapter number when it is unique ("ch.16"), else the position ("sec.2").
+
+    Using the position for everything would make "Chapter XVI" show up as ch.18 when the book
+    has an opening and a preface before it.
+    """
+    counts = Counter(s.number for s in sections if s.number is not None)
+    return [
+        f"ch.{s.number}" if s.number is not None and counts[s.number] == 1 else f"sec.{i}"
+        for i, s in enumerate(sections, start=1)
+    ]
+
+
 def split_sections(blocks: list[Block]) -> list[Section]:
     level = _heading_level(blocks)
     if level is not None:
@@ -161,7 +174,8 @@ def split_sections(blocks: list[Block]) -> list[Section]:
         if boundary:
             if current.blocks:
                 sections.append(current)
-            current = Section(title=block.text.strip()[:120], number=heading_number(block.text))
+            title = block.text.strip().strip("[]()").strip()[:120]  # "[Illustration ... Chapter I.]"
+            current = Section(title=title, number=heading_number(title))
         current.blocks.append(block)
     if current.blocks:
         sections.append(current)

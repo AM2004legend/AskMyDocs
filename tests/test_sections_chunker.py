@@ -1,6 +1,6 @@
 from app.ingest.chunker import chunk_blocks, split_sentences
 from app.ingest.parsers import Block
-from app.ingest.sections import heading_number, looks_like_heading, parse_number, split_sections
+from app.ingest.sections import heading_number, looks_like_heading, parse_number, section_labels, split_sections
 
 
 def words(n: int, word: str = "word") -> str:
@@ -33,6 +33,20 @@ def test_split_by_regex_headings_and_merge_toc_lines():
     assert [s.number for s in sections] == [1, 2]
     assert "alpha" in sections[0].text and "beta" in sections[1].text
     assert "Contents" in sections[0].text  # tiny TOC sections folded forward, nothing lost
+
+
+def test_labels_use_real_chapter_numbers():
+    blocks = [Block("Preface"), Block(words(60)), Block("CHAPTER I."), Block(words(60)), Block("CHAPTER II.")]
+    blocks += [Block(words(60))]
+    sections = split_sections(blocks)
+    assert section_labels(sections) == ["sec.1", "ch.1", "ch.2"]  # not ch.2/ch.3 because of the preface
+
+
+def test_labels_fall_back_when_numbers_repeat():
+    blocks = []
+    for book in ("Book 1", "Book 2"):
+        blocks += [Block(f"Chapter 1 {book}"), Block(words(60))]
+    assert section_labels(split_sections(blocks)) == ["sec.1", "sec.2"]
 
 
 def test_split_uses_heading_level_that_repeats():

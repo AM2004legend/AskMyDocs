@@ -86,6 +86,13 @@ def prepare(doc_id: int, question: str) -> Prepared:
             else []
         )
         route = route_question(question, {e["id"]: {e["name"], *e["aliases"]} for e in entities})
+        labels = {
+            r["ordinal"]: r["label"]
+            for r in conn.execute(
+                "SELECT ordinal, COALESCE(label, 'sec.' || ordinal) AS label FROM sections WHERE document_id = %s",
+                [doc_id],
+            ).fetchall()
+        }
         section_ordinals = None
         if route.section_number is not None:
             rows = conn.execute(
@@ -119,7 +126,7 @@ def prepare(doc_id: int, question: str) -> Prepared:
                 Excerpt(
                     id=len(excerpts) + 1,
                     source=source,
-                    loc=f"ch.{s['ordinal']}",
+                    loc=labels[s["ordinal"]],
                     text=f"[{s['title']}] {_truncate_words(s['summary'], per_section)}",
                     kind="section_summary",
                 )
@@ -139,7 +146,7 @@ def prepare(doc_id: int, question: str) -> Prepared:
         lines = []
         for e in chosen:
             aliases = f" Also called: {', '.join(e['aliases'])}." if e["aliases"] else ""
-            where = ", ".join(f"ch.{n}" for n in e["section_ids"][:30])
+            where = ", ".join(labels.get(n, f"sec.{n}") for n in e["section_ids"][:30])
             lines.append(f"{e['name']} ({e['kind']}).{aliases} {e['description']} Appears in: {where}.")
         excerpts = [Excerpt(id=1, source=source, loc="entity index", text="\n".join(lines), kind="entity")]
         keywords = " ".join(n for e in chosen[:5] for n in [e["name"], *e["aliases"]]) if route.entity_ids else ""

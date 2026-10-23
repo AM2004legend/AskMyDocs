@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS sections (
     id          bigserial PRIMARY KEY,
     document_id bigint NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
-    ordinal     int    NOT NULL,          -- 1, 2, 3 ... in reading order; cited as ch.N
+    ordinal     int    NOT NULL,          -- 1, 2, 3 ... in reading order
+    label       text,                     -- what citations show: "ch.16" (real chapter number) or "sec.2"
     title       text   NOT NULL,
     number      int,                      -- "Chapter IV" -> 4, so "chapter 4" questions can find it
     page_start  int,
@@ -36,6 +37,8 @@ CREATE TABLE IF NOT EXISTS sections (
     entities_raw jsonb,                   -- per-section entity extraction, merged into `entities`
     UNIQUE (document_id, ordinal)
 );
+
+ALTER TABLE sections ADD COLUMN IF NOT EXISTS label text;  -- for databases created before labels existed
 
 CREATE TABLE IF NOT EXISTS chunks (
     id          bigserial PRIMARY KEY,
