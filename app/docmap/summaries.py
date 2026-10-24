@@ -21,10 +21,14 @@ from app.db import get_pool
 from app.docmap.entities import Entity, apply_groups, clean_raw, merge_entities
 from app.llm import prompts
 from app.llm.client import LLMClient, LLMError, LLMRequestTooLarge, get_llm
+from app.privacy.tripwire import sensitive_scope
+from app.privacy.vault import VaultError, load_entries
 
 log = logging.getLogger(__name__)
 _map_lock = threading.Lock()  # one document map at a time, to respect rate limits
 MAX_CONSOLIDATE = 300
+# room for the JSON reply; prompt (~3500 words = ~4600 tokens) + 3000 still fits Groq's free 8000 tokens/minute
+MAP_REPLY_TOKENS = 3000
 
 
 def parse_json(text: str) -> dict:
@@ -38,19 +42,19 @@ def parse_json(text: str) -> dict:
     return data
 
 
+class MalformedReply(LLMError):
+    """The model's reply wasn't the JSON we asked for (often a long reply cut off mid-way)."""
+
+
 def call_json(llm: LLMClient, messages: list[dict]) -> dict:
-    reply = llm.chat(messages, paced=True)
-    try:
-        return parse_json(reply)
-    except (ValueError, json.JSONDecodeError):
-        retry = messages + [
-            {"role": "assistant", "content": reply[:2000]},
-            {"role": "user", "content": "That was not valid JSON. Reply again with ONLY the JSON object."},
-        ]
+    """Ask for JSON; one fresh retry if the reply doesn't parse (sending the bad reply back would double the tokens)."""
+    for attempt in (1, 2):
+        reply = llm.chat(messages, paced=True, max_tokens=MAP_REPLY_TOKENS)
         try:
-            return parse_json(llm.chat(retry, paced=True))
-        except (ValueError, json.JSONDecodeError) as exc:
-            raise LLMError("The AI returned malformed data while building the document map.") from exc
+            return parse_json(reply)
+        except (ValueError, json.JSONDecodeError):
+            log.warning("reply was not valid JSON (%d chars, attempt %d)", len(reply), attempt)  # never the content
+    raise MalformedReply("The AI returned malformed data while building the document map.")
 
 
 def pack_batches(sections: list[dict], max_words: int) -> list[list[dict]]:
@@ -83,7 +87,7 @@ def summarise_long_section(llm: LLMClient, section: dict, part_words: int) -> tu
         title = f"{section['title']} (part {n} of {len(parts)})"
         try:
             data = call_json(llm, prompts.map_messages([(1, title, part)], settings.summary_words))
-        except LLMRequestTooLarge:
+        except (LLMRequestTooLarge, MalformedReply):  # too big, or the reply got cut off: smaller parts
             if part_words <= 500:
                 raise
             return summarise_long_section(llm, section, part_words // 2)
@@ -112,6 +116,12 @@ def summarise_batch(llm: LLMClient, batch: list[dict]) -> dict[int, tuple[str, l
         if len(batch) == 1:
             s = batch[0]
             return {s["ordinal"]: summarise_long_section(llm, s, max(s["n_words"] // 2, 500))}
+        half = len(batch) // 2
+        return summarise_batch(llm, batch[:half]) | summarise_batch(llm, batch[half:])
+    except MalformedReply:
+        if len(batch) == 1:
+            raise
+        # long JSON replies are the ones that get cut off: ask for fewer sections at a time
         half = len(batch) // 2
         return summarise_batch(llm, batch[:half]) | summarise_batch(llm, batch[half:])
 
@@ -183,7 +193,7 @@ def _build(doc_id: int, llm: LLMClient, force: bool) -> None:
     settings = get_settings()
     pool = get_pool()
     with pool.connection() as conn:
-        doc = conn.execute("SELECT title, filename FROM documents WHERE id = %s", [doc_id]).fetchone()
+        doc = conn.execute("SELECT title, filename, sensitive FROM documents WHERE id = %s", [doc_id]).fetchone()
         if doc is None:
             return
         if force:
@@ -225,9 +235,10 @@ def _build(doc_id: int, llm: LLMClient, force: bool) -> None:
             )
 
     _set(doc_id, progress="Writing the whole-document summary")
-    overview = reduce_summaries(
-        llm, doc["title"] or doc["filename"], [(r["title"], r["summary"]) for r in rows], settings.map_batch_words
-    )
+    # a sensitive document's filename may contain PII; its stored title was redacted at ingest
+    title = doc["title"] if doc["sensitive"] else (doc["title"] or doc["filename"])
+    overview = reduce_summaries(llm, title or "the document", [(r["title"], r["summary"]) for r in rows],
+                                settings.map_batch_words)  # fmt: skip
     with pool.connection() as conn:
         conn.execute(
             "INSERT INTO doc_summary (document_id, summary) VALUES (%s, %s)"
@@ -242,7 +253,15 @@ def build_document_map(doc_id: int, force: bool = False) -> None:
     if not llm.configured:
         _set(doc_id, map_status="pending", progress="Document map skipped: no LLM key configured")
         return
-    with _map_lock:
+    with get_pool().connection() as conn:
+        row = conn.execute("SELECT sensitive FROM documents WHERE id = %s", [doc_id]).fetchone()
+    sensitive = bool(row and row["sensitive"])
+    try:
+        known = {value: pii_type for _, pii_type, value in load_entries(doc_id)} if sensitive else {}
+    except VaultError as exc:
+        _set(doc_id, map_status="failed", progress=f"Document map stopped: {exc}")
+        return
+    with _map_lock, sensitive_scope(sensitive, known_values=known):  # tripwire on for sensitive docs
         try:
             _build(doc_id, llm, force)
         except LLMError as exc:

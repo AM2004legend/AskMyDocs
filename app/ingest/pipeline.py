@@ -16,13 +16,17 @@ from app.embeddings import embed
 from app.ingest.chunker import chunk_blocks
 from app.ingest.parsers import ParseError, parse_file
 from app.ingest.sections import section_labels, split_sections
+from app.privacy.redactor import Redactor
+from app.privacy.vault import save_entries
 
 log = logging.getLogger(__name__)
 UPLOAD_DIR = Path("data") / "uploads"
 EMBED_BATCH = 128
 _ingest_lock = threading.Lock()  # one document at a time keeps CPU/RAM use predictable on a laptop
 
-DOC_COLUMNS = "id, filename, file_type, title, n_pages, status, map_status, progress, error, ocr_pages, created_at"
+DOC_COLUMNS = (
+    "id, filename, file_type, title, n_pages, status, map_status, progress, error, ocr_pages, sensitive, created_at"
+)
 
 
 def sha256_of(data: bytes) -> str:
@@ -34,12 +38,14 @@ def find_by_hash(sha: str) -> dict | None:
         return conn.execute(f"SELECT {DOC_COLUMNS} FROM documents WHERE content_sha256 = %s", [sha]).fetchone()
 
 
-def create_document(filename: str, file_type: str, sha: str) -> dict:
+def create_document(filename: str, file_type: str, sha: str, sensitive: bool = False) -> dict:
+    # a sensitive file's name may itself contain a name ("Rahul_offer_letter.pdf"), so don't use it as the title
+    title = "Sensitive document" if sensitive else Path(filename).stem
     with get_pool().connection() as conn:
         return conn.execute(
-            "INSERT INTO documents (filename, file_type, title, content_sha256, progress)"
-            f" VALUES (%s, %s, %s, %s, 'Queued') RETURNING {DOC_COLUMNS}",
-            [filename, file_type, Path(filename).stem, sha],
+            "INSERT INTO documents (filename, file_type, title, content_sha256, sensitive, progress)"
+            f" VALUES (%s, %s, %s, %s, %s, 'Queued') RETURNING {DOC_COLUMNS}",
+            [filename, file_type, title, sha, sensitive],
         ).fetchone()
 
 
@@ -62,9 +68,27 @@ class _Progress:
             update_document(self.doc_id, progress=message)
 
 
+def _redact(sections, chunk_rows, title: str) -> tuple[list[str], list[str], str, list]:
+    """Sensitive mode: replace PII everywhere before anything is embedded, stored or sent.
+
+    Pass 1 runs all detectors (incl. NER) over every section to learn the full value -> placeholder
+    map; pass 2 rewrites the texts, so a name first found in chapter 9 is also hidden in chapter 1.
+    """
+    redactor = Redactor()
+    for s in sections:
+        redactor.learn(s.text)
+    texts = [redactor.redact(s.text, use_ner=False) for s in sections]
+    titles = [redactor.redact(s.title, use_ner=False) for s in sections]
+    for _, chunk in chunk_rows:  # chunks join PDF lines, so re-run the regex detectors on them too
+        chunk.text = redactor.redact(chunk.text, use_ner=False)
+    return texts, titles, redactor.redact(title, use_ner=False), redactor.entries()
+
+
 def _ingest(doc_id: int, path: Path, file_type: str) -> None:
     settings = get_settings()
     progress = _Progress(doc_id)
+    with get_pool().connection() as conn:
+        sensitive = conn.execute("SELECT sensitive FROM documents WHERE id = %s", [doc_id]).fetchone()["sensitive"]
     parsed = parse_file(path, file_type, progress)
     sections = split_sections(parsed.blocks)
 
@@ -74,6 +98,12 @@ def _ingest(doc_id: int, path: Path, file_type: str) -> None:
             chunk_rows.append((index, chunk))
     if not chunk_rows:
         raise ParseError("The file was read but contained no usable text.")
+
+    texts, titles, title = [s.text for s in sections], [s.title for s in sections], parsed.title
+    vault_entries = None
+    if sensitive:
+        progress("Finding and hiding personal data (on this computer)", force=True)
+        texts, titles, title, vault_entries = _redact(sections, chunk_rows, parsed.title)
 
     vectors = []
     for start in range(0, len(chunk_rows), EMBED_BATCH):
@@ -90,9 +120,12 @@ def _ingest(doc_id: int, path: Path, file_type: str) -> None:
             row = conn.execute(
                 "INSERT INTO sections (document_id, ordinal, label, title, number, page_start, page_end, n_words, text)"
                 " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                [doc_id, ordinal, labels[ordinal - 1], s.title, s.number, s.page_start, s.page_end, s.n_words, s.text],
-            ).fetchone()
+                [doc_id, ordinal, labels[ordinal - 1], titles[ordinal - 1], s.number, s.page_start, s.page_end,
+                 s.n_words, texts[ordinal - 1]],
+            ).fetchone()  # fmt: skip
             section_ids.append(row["id"])
+        if vault_entries is not None:
+            save_entries(conn, doc_id, vault_entries)
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO chunks (document_id, section_id, page, ordinal, text, embedding)"
@@ -106,7 +139,7 @@ def _ingest(doc_id: int, path: Path, file_type: str) -> None:
             # parsers return "" when the file has no real title; then keep the original filename
             "UPDATE documents SET title = COALESCE(NULLIF(%s, ''), title), n_pages = %s, ocr_pages = %s,"
             " status = 'ready', progress = NULL, error = NULL WHERE id = %s",
-            [parsed.title[:300], parsed.n_pages, parsed.ocr_pages, doc_id],
+            [title[:300], parsed.n_pages, parsed.ocr_pages, doc_id],
         )
 
 
@@ -136,7 +169,7 @@ def process_document(doc_id: int, path: Path, file_type: str, build_map: bool = 
 
 
 def delete_document(doc_id: int) -> bool:
-    """Delete a document; ON DELETE CASCADE removes sections, chunks, entities, summary and logs."""
+    """Delete a document; ON DELETE CASCADE removes sections, chunks, entities, summary, PII vault and logs."""
     with get_pool().connection() as conn:
         deleted = conn.execute("DELETE FROM documents WHERE id = %s RETURNING id", [doc_id]).fetchone()
     for leftover in UPLOAD_DIR.glob(f"{doc_id}.*"):

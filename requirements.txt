@@ -20,6 +20,11 @@ beautifulsoup4==4.15.0
 rapidocr_onnxruntime==1.4.4
 pillow==13.0.0
 
+# sensitive mode: local NER for names/orgs/places + encrypted vault
+spacy==3.8.16
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+cryptography==50.0.2
+
 # LLM (Gemini / Groq via the OpenAI-compatible API)
 openai==3.37.0
 

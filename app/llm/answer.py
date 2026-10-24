@@ -13,9 +13,17 @@ from app.db import get_pool
 from app.docmap.router import ENTITY, SPECIFIC, WHOLE_DOCUMENT, route_question
 from app.llm.client import get_llm
 from app.llm.prompts import NOT_FOUND, Excerpt, answer_messages
+from app.privacy.redactor import Redactor, restore
+from app.privacy.tripwire import sensitive_scope
+from app.privacy.vault import load_entries
 from app.retrieval.hybrid import hybrid_search
 
 WHOLE_DOC_BUDGET_WORDS = 9000  # cap on summary text sent for "summarise the book" questions
+PLACEHOLDER_NOTE = (
+    "(Note: personal details in this document were replaced by placeholders such as [PERSON_1] or "
+    "[PHONE_1]. A placeholder IS the value: answer with the placeholder itself, e.g. 'The phone number "
+    "is [PHONE_1].' It is replaced with the real value before the user sees it.)"
+)
 MAX_LIST_ENTITIES = 25
 
 
@@ -35,22 +43,29 @@ class Prepared:
     best_similarity: float | None = None
     note: str = ""
     retrieved_chunk_ids: list[int] = field(default_factory=list)
+    question: str = ""  # the question as the LLM will see it (redacted for sensitive documents)
+    sensitive: bool = False
+    restore_map: dict[str, str] = field(default_factory=dict)  # placeholder -> real value, stays local
+    filename: str = ""
 
 
 @dataclass
 class Answer:
-    answer: str
+    answer: str  # what the user sees (placeholders restored to real values)
     route: str
     refused: bool
     citations: list[dict]  # excerpts the answer actually cites
     sources: list[dict]  # every excerpt that was shown to the model
     latency_ms: int
     best_similarity: float | None = None
+    sensitive: bool = False
+    answer_redacted: str | None = None  # the LLM's raw reply, with placeholders
+    llm_payload: list[dict] | None = None  # exactly what was sent to the LLM (transparency panel)
 
 
 def _load_doc(conn, doc_id: int) -> dict:
     doc = conn.execute(
-        "SELECT id, filename, title, status, map_status FROM documents WHERE id = %s", [doc_id]
+        "SELECT id, filename, file_type, title, status, map_status, sensitive FROM documents WHERE id = %s", [doc_id]
     ).fetchone()
     if doc is None:
         raise DocumentNotFound(doc_id)
@@ -72,9 +87,27 @@ def _truncate_words(text: str, n: int) -> str:
 
 
 def prepare(doc_id: int, question: str) -> Prepared:
-    settings = get_settings()
     with get_pool().connection() as conn:
         doc = _load_doc(conn, doc_id)
+    if not doc["sensitive"]:
+        prepared = _prepare(doc, question)
+        prepared.question, prepared.filename = question, doc["filename"]
+        return prepared
+    # Sensitive: hide known values (from the vault) and any new PII typed in the question, locally.
+    redactor = Redactor(load_entries(doc_id), new_prefix="Q")
+    redacted_question = redactor.redact(question, use_ner=True)
+    prepared = _prepare(doc, redacted_question, source=f"document.{doc['file_type']}")
+    # without this the model treated "[PHONE_1]" as "the phone number is not given" (seen in testing)
+    prepared.note = (prepared.note + " " if prepared.note else "") + PLACEHOLDER_NOTE
+    prepared.question, prepared.filename, prepared.sensitive = redacted_question, doc["filename"], True
+    prepared.restore_map = {placeholder: value for placeholder, (_, value) in redactor.values.items()}
+    return prepared
+
+
+def _prepare(doc: dict, question: str, source: str | None = None) -> Prepared:
+    settings = get_settings()
+    doc_id = doc["id"]
+    with get_pool().connection() as conn:
         map_ready = doc["map_status"] == "ready"
         entities = (
             conn.execute(
@@ -112,7 +145,7 @@ def prepare(doc_id: int, question: str) -> Prepared:
                 row = conn.execute("SELECT summary FROM doc_summary WHERE document_id = %s", [doc_id]).fetchone()
                 overview = row["summary"] if row else None
 
-    source = doc["filename"]
+    source = source or doc["filename"]  # sensitive documents send a neutral name: filenames can hold PII
     note = ""
 
     # ----- whole-document: answer from the document map -----
@@ -205,23 +238,39 @@ def _log(doc_id: int, question: str, prepared: Prepared, refused: bool, latency_
         )
 
 
+def _for_display(e: Excerpt, prepared: Prepared) -> dict:
+    """Excerpt as the user sees it: real filename and (for sensitive docs) real values restored locally."""
+    shown = asdict(e)
+    if prepared.sensitive:
+        shown.update(text=restore(e.text, prepared.restore_map), text_redacted=e.text, source=prepared.filename)
+    return shown
+
+
 def answer_question(doc_id: int, question: str) -> Answer:
     started = time.perf_counter()
     prepared = prepare(doc_id, question)
+    payload = None
     if prepared.refuse:
         text, cited = NOT_FOUND, []  # no LLM call at all
     else:
-        text = get_llm().chat(answer_messages(question, prepared.excerpts, prepared.note))
+        payload = answer_messages(prepared.question, prepared.excerpts, prepared.note)
+        # tripwire: blocks the call if raw PII slipped through (patterns + this document's own vault values)
+        known = {value: placeholder.rsplit("_", 1)[0] for placeholder, value in prepared.restore_map.items()}
+        with sensitive_scope(prepared.sensitive, known_values=known):
+            text = get_llm().chat(payload)
         cited = extract_citations(text, prepared.excerpts)
     refused = text.strip() == NOT_FOUND
     latency_ms = int((time.perf_counter() - started) * 1000)
-    _log(doc_id, question, prepared, refused, latency_ms)
+    _log(doc_id, prepared.question, prepared, refused, latency_ms)  # the redacted question: no PII in logs
     return Answer(
-        answer=text,
+        answer=restore(text, prepared.restore_map) if prepared.sensitive else text,
         route=prepared.route,
         refused=refused,
-        citations=[asdict(e) for e in cited],
-        sources=[asdict(e) for e in prepared.excerpts],
+        citations=[_for_display(e, prepared) for e in cited],
+        sources=[_for_display(e, prepared) for e in prepared.excerpts],
         latency_ms=latency_ms,
         best_similarity=prepared.best_similarity,
+        sensitive=prepared.sensitive,
+        answer_redacted=text if prepared.sensitive else None,
+        llm_payload=payload,
     )

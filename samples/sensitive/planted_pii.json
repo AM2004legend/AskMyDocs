@@ -1,0 +1,41 @@
+{
+  "PERSON": [
+    "Rohan Mehta",
+    "Ananya Iyer",
+    "Vikram Desai"
+  ],
+  "ORG": [
+    "Sunrise Realty Private Limited"
+  ],
+  "EMAIL": [
+    "rohan.mehta.landlord@example.com",
+    "ananya.iyer88@example.org"
+  ],
+  "PHONE": [
+    "+91 98220 41736",
+    "9765013482"
+  ],
+  "PAN": [
+    "ABCPM4821K",
+    "DQZPI7356L"
+  ],
+  "AADHAAR": [
+    "3043 3218 1964",
+    "201338908389"
+  ],
+  "CARD": [
+    "4637 9402 6542 3517"
+  ],
+  "IFSC": [
+    "HDFC0004821"
+  ],
+  "ACCOUNT": [
+    "50100387462915"
+  ],
+  "UPI": [
+    "ananya.iyer@okhdfcbank"
+  ],
+  "DOB": [
+    "14/07/1996"
+  ]
+}

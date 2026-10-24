@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,8 @@ from app.ingest.pipeline import (
 )
 from app.llm.answer import DocumentNotFound, DocumentNotReady, answer_question
 from app.llm.client import LLMError, get_llm
+from app.privacy import vault
+from app.privacy.redactor import PLACEHOLDER_RE, restore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -42,6 +44,11 @@ async def lifespan(_app: FastAPI):
             "UPDATE documents SET map_status = 'failed',"
             " progress = 'Document map was interrupted. Click Build map to resume.' WHERE map_status = 'building'"
         )
+        if get_llm().configured:  # a key was added since upload: the "skipped" note is no longer true
+            conn.execute(
+                "UPDATE documents SET progress = NULL"
+                " WHERE map_status = 'pending' AND progress LIKE 'Document map skipped%'"
+            )
     yield
     db.close_pool()
 
@@ -79,8 +86,10 @@ def health():
 
 
 @app.post("/documents", status_code=202)
-async def upload(file: UploadFile, background: BackgroundTasks):
+async def upload(file: UploadFile, background: BackgroundTasks, sensitive: bool = Form(False)):
     settings = get_settings()
+    if sensitive and not vault.is_configured():
+        raise HTTPException(400, "Sensitive mode needs PII_VAULT_KEY in .env (see .env.example).")
     filename = Path(file.filename or "upload").name
     file_type = Path(filename).suffix.lower().lstrip(".")
     if file_type not in SUPPORTED_TYPES:
@@ -95,9 +104,12 @@ async def upload(file: UploadFile, background: BackgroundTasks):
     sha = sha256_of(data)
     existing = find_by_hash(sha)
     if existing:  # same bytes already uploaded: reuse it, never re-embed or re-summarise
+        if existing["sensitive"] != sensitive:
+            mode = "sensitive" if existing["sensitive"] else "normal"
+            raise HTTPException(409, f"This file is already uploaded in {mode} mode. Delete it first to change mode.")
         return JSONResponse({**jsonable(existing), "duplicate": True}, status_code=200)
 
-    doc = create_document(filename, file_type, sha)
+    doc = create_document(filename, file_type, sha, sensitive=sensitive)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     path = UPLOAD_DIR / f"{doc['id']}.{file_type}"
     path.write_bytes(data)
@@ -135,12 +147,20 @@ def ask(doc_id: int, body: AskRequest):
         raise HTTPException(404, "Document not found.") from None
     except DocumentNotReady as exc:
         raise HTTPException(409, f"Document is not ready yet (status: {exc}).") from None
-    except LLMError as exc:
+    except (LLMError, vault.VaultError) as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+def _vault_values(doc_id: int) -> dict[str, str]:
+    try:
+        return {placeholder: value for placeholder, _, value in vault.load_entries(doc_id)}
+    except vault.VaultError as exc:
         raise HTTPException(503, str(exc)) from exc
 
 
 @app.get("/documents/{doc_id}/map")
-def document_map(doc_id: int):
+def document_map(doc_id: int, redacted: bool = False):
+    """The document map. For sensitive documents real values are restored locally unless redacted=true."""
     doc = _get_doc(doc_id)
     with db.get_pool().connection() as conn:
         sections = conn.execute(
@@ -157,13 +177,66 @@ def document_map(doc_id: int):
     labels = {s["ordinal"]: s["label"] for s in sections}
     for e in entities:  # show "ch.16" style labels, not internal ordinals
         e["appears_in"] = [labels.get(n, f"sec.{n}") for n in e["section_ids"]]
+    overview = summary["summary"] if summary else None
+    if doc["sensitive"] and not redacted:
+        values = _vault_values(doc_id)
+        for s in sections:
+            s["title"], s["summary"] = restore(s["title"], values), s["summary"] and restore(s["summary"], values)
+        for e in entities:
+            e["name"], e["description"] = restore(e["name"], values), restore(e["description"], values)
+            e["aliases"] = [restore(a, values) for a in e["aliases"]]
+        overview = overview and restore(overview, values)
     return {
         "map_status": doc["map_status"],
         "progress": doc["progress"],
-        "summary": summary["summary"] if summary else None,
+        "sensitive": doc["sensitive"],
+        "redacted": doc["sensitive"] and redacted,
+        "summary": overview,
         "sections": sections,
         "entities": entities,
     }
+
+
+@app.get("/documents/{doc_id}/pii-report")
+def pii_report(doc_id: int):
+    """How much of each PII type a sensitive document contains, and where. Never returns the values."""
+    doc = _get_doc(doc_id)
+    if not doc["sensitive"]:
+        raise HTTPException(400, "PII reports exist only for documents uploaded in sensitive mode.")
+    with db.get_pool().connection() as conn:
+        entries = conn.execute(
+            "SELECT placeholder, pii_type FROM pii_vault WHERE document_id = %s", [doc_id]
+        ).fetchall()
+        sections = conn.execute(
+            "SELECT COALESCE(label, 'sec.' || ordinal) AS label, page_start, page_end, text FROM sections"
+            " WHERE document_id = %s ORDER BY ordinal",
+            [doc_id],
+        ).fetchall()
+        chunk_pages = conn.execute(
+            "SELECT page, text FROM chunks WHERE document_id = %s AND page IS NOT NULL", [doc_id]
+        ).fetchall()
+    type_of = {e["placeholder"]: e["pii_type"] for e in entries}
+    report: dict[str, dict] = {}
+    for e in entries:
+        report.setdefault(e["pii_type"], {"type": e["pii_type"], "distinct": 0, "occurrences": 0, "where": set()})
+        report[e["pii_type"]]["distinct"] += 1
+    for s in sections:  # sections hold the text exactly once, so counting here doesn't double-count overlaps
+        for m in PLACEHOLDER_RE.finditer(s["text"]):
+            placeholder = f"{m.group(1)}_{m.group(2)}"
+            if placeholder in type_of:
+                item = report[type_of[placeholder]]
+                item["occurrences"] += 1
+                if s["page_start"] is None:
+                    item["where"].add(s["label"])
+    for c in chunk_pages:
+        for m in PLACEHOLDER_RE.finditer(c["text"]):
+            placeholder = f"{m.group(1)}_{m.group(2)}"
+            if placeholder in type_of:
+                report[type_of[placeholder]]["where"].add(f"p.{c['page']}")
+    items = sorted(report.values(), key=lambda r: -r["occurrences"])
+    for item in items:
+        item["where"] = sorted(item["where"], key=lambda w: (len(w), w))
+    return {"types": items, "total_distinct": sum(i["distinct"] for i in items)}
 
 
 @app.post("/documents/{doc_id}/map", status_code=202)

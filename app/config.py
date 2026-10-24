@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     fallback_llm_base_url: str = "https://api.groq.com/openai/v1"
     fallback_llm_api_key: SecretStr = SecretStr("")
     fallback_llm_model: str = ""
+    # "reasoning" models (e.g. Groq's gpt-oss) spend hidden tokens thinking; at the default 2048-token
+    # reply cap that left NO room for the JSON (measured: 1745 of 2048 tokens). "low" fixes it.
+    llm_reasoning_effort: str = ""
+    fallback_llm_reasoning_effort: str = "low"
     llm_max_retries: int = 4
     llm_timeout_seconds: float = 120.0
     llm_min_interval_seconds: float = 0.0  # spacing between calls while building the doc map
@@ -41,7 +45,9 @@ class Settings(BaseSettings):
     min_vector_similarity: float = 0.25  # below this best-match cosine similarity we refuse
 
     # document map
-    map_batch_words: int = 12000  # how many words of chapters go into one summarising call
+    # words of chapters per summarising call: ~3500 words + the JSON reply fits Groq's free 8000
+    # tokens/minute, and short replies don't get cut off (12000 failed on the free tiers; see README)
+    map_batch_words: int = 3500
     summary_words: int = 120
 
     # uploads + OCR
@@ -49,6 +55,11 @@ class Settings(BaseSettings):
     ocr_enabled: bool = True
     ocr_min_chars: int = 25  # a PDF page with less extractable text than this gets OCR'd
     ocr_render_scale: float = 2.5  # 72 dpi * 2.5 = 180 dpi
+
+    # sensitive mode (phase 9)
+    pii_vault_key: SecretStr = SecretStr("")  # Fernet key; encrypts the placeholder -> value vault
+    ner_enabled: bool = True  # local spaCy names/organisations/places detection
+    ner_model: str = "en_core_web_sm"
 
 
 @lru_cache

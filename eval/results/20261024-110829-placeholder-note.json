@@ -1,0 +1,218 @@
+{
+  "label": "placeholder-note",
+  "answers": true,
+  "results": [
+    {
+      "id": "ra-s1",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.6476710438728333,
+      "locs": [
+        "ch.4",
+        "ch.3",
+        "ch.5",
+        "ch.7",
+        "ch.6",
+        "ch.2"
+      ],
+      "answer": "The monthly rent is Rs. 28,000, and it is due on or before the 5th day of each month [document.txt, ch.4].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 15440
+    },
+    {
+      "id": "ra-s2",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.6211573296440468,
+      "locs": [
+        "ch.7",
+        "ch.3",
+        "ch.5",
+        "ch.4",
+        "ch.1",
+        "ch.8"
+      ],
+      "answer": "The notice period is two (2) months' written notice, which may be given by either party to end the agreement [document.txt, ch.7].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 6530
+    },
+    {
+      "id": "ra-s3",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.6400165557861328,
+      "locs": [
+        "ch.5",
+        "ch.7",
+        "ch.4",
+        "ch.3",
+        "ch.6",
+        "ch.1"
+      ],
+      "answer": "The security deposit is Rs. 84,000 [document.txt, ch.5]. It will be refunded within 30 days of the Tenant vacating, after any necessary deductions for unpaid rent or damage beyond normal wear and tear [document.txt, ch.5].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 6421
+    },
+    {
+      "id": "ra-s4",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.7566799215459917,
+      "locs": [
+        "ch.7",
+        "ch.5",
+        "ch.4",
+        "ch.8",
+        "ch.6",
+        "ch.1"
+      ],
+      "answer": "Yes, there is a lock-in period of six months [document.txt, ch.7]. If the Tenant leaves during this period, they forfeit one month's deposit [document.txt, ch.7].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 7412
+    },
+    {
+      "id": "ra-s5",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.421416699886322,
+      "locs": [
+        "ch.6",
+        "ch.4",
+        "ch.1",
+        "ch.2",
+        "ch.5",
+        "ch.3"
+      ],
+      "answer": "Electricity and internet are paid by the Tenant according to actual bills [document.txt, ch.6].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 6379
+    },
+    {
+      "id": "ra-s6",
+      "type": "specific",
+      "route": "specific",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.5615553855895996,
+      "locs": [
+        "ch.1",
+        "ch.2",
+        "ch.8",
+        "ch.6",
+        "ch.4",
+        "ch.5"
+      ],
+      "answer": "The landlord's phone number is +91 98220 41736 [document.txt, ch.1].",
+      "correct": 1.0,
+      "refusal_ok": true,
+      "latency_ms": 18286
+    },
+    {
+      "id": "ra-w1",
+      "type": "whole_document",
+      "route": "whole_document",
+      "route_ok": true,
+      "hit": null,
+      "refused": false,
+      "best_similarity": null,
+      "locs": [
+        "overview",
+        "ch.1",
+        "ch.2",
+        "ch.3",
+        "ch.4",
+        "ch.5",
+        "ch.6",
+        "ch.7",
+        "ch.8"
+      ],
+      "answer": "This residential lease agreement, executed in Pune on 1 March 2026, outlines the following terms:\n\n*   **Parties and Property:** The agreement is between a landlord and a tenant for a furnished two-bedroom flat (unit 702, Tower B) and one covered parking space [document.txt, overview], [document.txt, ch.2].\n*   **Term:** The lease lasts for eleven months, from 1 March 2026 to 31 January 2027, with a 5 percent rent-increase cap upon renewal [document.txt, overview], [document.txt, ch.4].\n*   **Financials:** Monthly rent is Rs. 28,000, due by the 5th of each month via bank transfer or UPI, with a Rs. 500 weekly late fee after the 10th [document.txt, overview], [document.txt, ch.5]. A security deposit of Rs. 84,000 was paid [document.txt, overview], [document.txt, ch.6].\n*   **Maintenance and Utilities:** The landlord covers society maintenance and structural repairs, while the tenant pays for electricity, internet, cooking gas, and minor repairs under Rs. 2,000 [document.txt, overview], [document.txt, ch.7].\n*   **Termination:** A two-month written notice is required for termination. A six-month lock-in period applies, during which early exit results in the forfeiture of one month\u2019s deposit [document.txt, overview], [document.txt, ch.8].\n*   **Usage:** The property is for residential use by the tenant and immediate family only; subletting is prohibited, and pets require written consent [document.txt, overview], [document.txt, ch.9].",
+      "correct": 0.5,
+      "refusal_ok": true,
+      "latency_ms": 6494
+    },
+    {
+      "id": "ra-e1",
+      "type": "entity",
+      "route": "entity",
+      "route_ok": true,
+      "hit": true,
+      "refused": false,
+      "best_similarity": 0.337715744972229,
+      "locs": [
+        "entity index",
+        "ch.1",
+        "ch.3",
+        "ch.7",
+        "ch.2",
+        "ch.6",
+        "ch.8"
+      ],
+      "answer": "The parties to this agreement are:\n\n*   **Landlord:** Rohan Mehta [document.txt, ch.1]\n*   **Tenant:** Ananya Iyer [document.txt, ch.1]",
+      "correct": 0.5,
+      "refusal_ok": true,
+      "latency_ms": 6464
+    },
+    {
+      "id": "ra-u1",
+      "type": "unanswerable",
+      "route": "specific",
+      "route_ok": null,
+      "hit": null,
+      "refused": true,
+      "best_similarity": 0.6131320230286118,
+      "locs": [
+        "ch.4",
+        "ch.6",
+        "ch.2",
+        "ch.7",
+        "ch.3",
+        "ch.1"
+      ],
+      "answer": "I couldn't find that in this document.",
+      "refusal_ok": true,
+      "latency_ms": 1397
+    },
+    {
+      "id": "ra-u2",
+      "type": "unanswerable",
+      "route": "specific",
+      "route_ok": null,
+      "hit": null,
+      "refused": true,
+      "best_similarity": 0.1271866931207961,
+      "locs": [
+        "ch.6",
+        "ch.8",
+        "ch.2",
+        "ch.1",
+        "ch.3",
+        "ch.5"
+      ],
+      "answer": "I couldn't find that in this document.",
+      "refusal_ok": true,
+      "latency_ms": 54
+    }
+  ]
+}

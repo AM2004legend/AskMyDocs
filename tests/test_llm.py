@@ -71,6 +71,46 @@ def test_bad_key_on_primary_uses_fallback_and_does_not_retry_forever():
     assert fakes["gemini"].calls == 1 and sleeps == []
 
 
+def test_too_large_for_fallback_waits_for_primary_instead_of_giving_up():
+    # what really happened on the free tiers: Gemini busy (429), Groq's limit too small (413)
+    client, fakes, sleeps = make(
+        {
+            "gemini": [status_error(openai.RateLimitError, 429), "from gemini"],
+            "groq": [status_error(openai.APIStatusError, 413)],
+        }
+    )
+    assert client.chat([]) == "from gemini"
+    assert fakes["groq"].calls == 1  # not asked again once we know the request is too big for it
+    assert len(sleeps) == 1
+
+
+def test_daily_quota_skips_that_model_until_reset():
+    daily = status_error(
+        openai.RateLimitError,
+        429,
+        "Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier 'retryDelay': '6800s'",
+    )
+    client, fakes, sleeps = make({"gemini": [daily], "groq": ["first", "second"]})
+    assert client.chat([]) == "first"
+    assert client.chat([]) == "second"
+    assert fakes["gemini"].calls == 1  # not retried, and not even tried on the next question
+    assert sleeps == []
+
+
+def test_all_quotas_used_up_gives_clear_message():
+    daily = status_error(openai.RateLimitError, 429, "GenerateRequestsPerDay limit exceeded")
+    client, _, _ = make({"gemini": [daily]})
+    with pytest.raises(LLMError, match="daily AI quota"):
+        client.chat([])
+
+
+def test_background_work_prefers_fallback():
+    providers = [Provider("p", "u", "k", "m", "primary"), Provider("f", "u", "k", "m", "fallback")]
+    fakes = {"p": ScriptedClient(["from primary"]), "f": ScriptedClient(["from fallback"])}
+    client = LLMClient(providers, make_client=lambda p: fakes[p.name])
+    assert client.chat([], paced=True) == "from fallback"
+
+
 def test_request_too_large_is_its_own_error():
     client, _, _ = make({"gemini": [status_error(openai.BadRequestError, 400, "context length exceeded")]})
     with pytest.raises(LLMRequestTooLarge):

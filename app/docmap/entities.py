@@ -31,6 +31,9 @@ KIND_ALIASES = {
 }
 
 
+NON_NAME_PLACEHOLDER_RE = re.compile(r"\[?(EMAIL|UPI|CARD|AADHAAR|ACCOUNT|PHONE|PAN|IFSC|DOB)_Q?\d+\]?")
+
+
 @dataclass
 class Entity:
     name: str
@@ -54,6 +57,8 @@ def clean_raw(item: dict) -> dict | None:
         return None
     name = str(item.get("name") or "").strip()
     if not name or len(name) > 120 or not norm(name):
+        return None
+    if NON_NAME_PLACEHOLDER_RE.fullmatch(name):  # sensitive docs: "[ACCOUNT_1]" is not a character
         return None
     aliases = item.get("aliases") or []
     if not isinstance(aliases, list):

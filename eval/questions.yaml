@@ -127,3 +127,94 @@ questions:
     question: What is Mr. Darcy's email address?
     expected: REFUSE
     status: draft
+
+  # ---------- sensitive mode: synthetic rental agreement (PRD phase 9 acceptance) ----------
+  # Upload samples/sensitive/rental_agreement_synthetic.txt with Sensitive mode ON.
+  # All personal data in it is fake; expected answers use the restored (real-looking) values.
+  - id: ra-s1
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: What is the monthly rent and when is it due?
+    expected: Rs. 28,000 per month, payable on or before the 5th of each month.
+    expected_locs: [ch.4]
+    evidence: ["28,000"]
+    status: checked
+
+  - id: ra-s2
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: What is the notice period?
+    expected: Two months' written notice by either party.
+    expected_locs: [ch.7]
+    evidence: ["two (2) months"]
+    status: checked
+
+  - id: ra-s3
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: How much is the security deposit and when is it refunded?
+    expected: Rs. 84,000 (three months' rent), refunded within 30 days of the tenant vacating, minus deductions.
+    expected_locs: [ch.5]
+    evidence: ["84,000"]
+    status: checked
+
+  - id: ra-s4
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: Is there a lock-in period, and what happens if the tenant leaves early?
+    expected: Yes, six months; leaving during it forfeits one month's deposit.
+    expected_locs: [ch.7]
+    evidence: ["lock-in"]
+    status: checked
+
+  - id: ra-s5
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: Who pays for electricity and internet?
+    expected: The tenant, according to actual bills.
+    expected_locs: [ch.6]
+    evidence: ["Electricity"]
+    status: checked
+
+  - id: ra-s6
+    document: rental_agreement_synthetic.txt
+    type: specific
+    question: What is the landlord's phone number?
+    expected: +91 98220 41736
+    expected_locs: [ch.1]
+    evidence: []
+    status: checked
+
+  - id: ra-w1
+    document: rental_agreement_synthetic.txt
+    type: whole_document
+    question: Summarise this agreement.
+    expected: >-
+      An 11-month residential lease of a flat in Baner, Pune from 1 March 2026 between landlord Rohan Mehta
+      and tenant Ananya Iyer; rent Rs. 28,000/month, deposit Rs. 84,000, two months' notice, six-month lock-in.
+    expected_locs: []
+    evidence: []
+    status: checked
+
+  - id: ra-e1
+    document: rental_agreement_synthetic.txt
+    type: entity
+    question: Who are the parties to this agreement?
+    expected: Rohan Mehta (landlord) and Ananya Iyer (tenant); the property is managed by Sunrise Realty Private Limited.
+    expected_locs: [ch.1]
+    evidence: []
+    status: checked
+
+  - id: ra-u1
+    document: rental_agreement_synthetic.txt
+    type: unanswerable
+    question: What is the landlord's monthly salary?
+    expected: REFUSE
+    status: checked
+
+  - id: ra-u2
+    document: rental_agreement_synthetic.txt
+    type: unanswerable
+    question: Does the society have a swimming pool?
+    expected: REFUSE
+    status: checked

@@ -1,11 +1,13 @@
 """Shared test setup.
 
 - Tests use their own database (askmydocs_test), created automatically, never your real data.
-- LLM keys are blanked so no test can ever call Gemini/Groq; tests that need an LLM use FakeLLM.
+- LLM keys are blanked so no test can ever call Gemini/Groq; tests that need an LLM use FakeLLM,
+  a real LLMClient whose network call is faked (so the tripwire is always exercised).
 - Tests marked `db` are skipped when Postgres isn't running.
 """
 
 import os
+from types import SimpleNamespace
 
 import psycopg
 import pytest
@@ -18,6 +20,9 @@ os.environ["DATABASE_URL"] = ADMIN_URL.rsplit("/", 1)[0] + "/" + TEST_DB
 os.environ["LLM_API_KEY"] = ""
 os.environ["FALLBACK_LLM_API_KEY"] = ""
 os.environ["LLM_MIN_INTERVAL_SECONDS"] = "0"
+os.environ["PII_VAULT_KEY"] = "V2hW0eY7o2h9m1mHq3n8Yp6r4s5t7u9w1x3z5b7d9f0="  # throwaway key, tests only
+
+from app.llm.client import LLMClient, Provider  # noqa: E402 - must come after the env setup above
 
 
 def _prepare_test_db() -> bool:
@@ -32,6 +37,8 @@ def _prepare_test_db() -> bool:
 
 
 DB_OK = _prepare_test_db()
+if os.environ.get("CI") and not DB_OK:  # in CI a missing database is a failure, not a reason to skip
+    raise RuntimeError(f"CI: cannot reach the test database at {ADMIN_URL}")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -43,18 +50,28 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
-class FakeLLM:
-    """Stands in for LLMClient. `handler(messages) -> str` decides the reply; every call is recorded."""
+class FakeLLM(LLMClient):
+    """A REAL LLMClient with only the network call faked.
 
-    configured = True
+    So every test still runs the real tripwire, retry and fallback code. `handler(messages) -> str`
+    decides the reply; every request that actually got "sent" is recorded in `calls`.
+    """
 
     def __init__(self, handler=None):
         self.calls: list[list[dict]] = []
         self.handler = handler or (lambda messages: "I couldn't find that in this document.")
+        fake = self
 
-    def chat(self, messages, temperature=0.1, max_tokens=None, paced=False):
-        self.calls.append(messages)
-        return self.handler(messages)
+        class _Completions:
+            @staticmethod
+            def create(**kwargs):
+                fake.calls.append(kwargs["messages"])
+                content = fake.handler(kwargs["messages"])
+                return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+        transport = SimpleNamespace(chat=SimpleNamespace(completions=_Completions))
+        super().__init__([Provider("fake", "http://fake", "fake", "fake-model")], max_retries=0,
+                         make_client=lambda p: transport)  # fmt: skip
 
 
 @pytest.fixture

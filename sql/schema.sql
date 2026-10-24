@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS doc_summary (
     summary     text NOT NULL
 );
 
+-- phase 9: placeholder -> real value for sensitive documents, Fernet-encrypted (key only in .env)
+CREATE TABLE IF NOT EXISTS pii_vault (
+    id              bigserial PRIMARY KEY,
+    document_id     bigint NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    placeholder     text   NOT NULL,   -- "PERSON_1"
+    pii_type        text   NOT NULL,   -- "PERSON", "EMAIL", "PAN", ...
+    encrypted_value text   NOT NULL,
+    UNIQUE (document_id, placeholder)
+);
+
 CREATE TABLE IF NOT EXISTS query_log (
     id                  bigserial PRIMARY KEY,
     document_id         bigint NOT NULL REFERENCES documents (id) ON DELETE CASCADE,

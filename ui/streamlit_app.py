@@ -42,8 +42,18 @@ with st.sidebar:
 
     with st.form("upload", clear_on_submit=True):
         uploaded = st.file_uploader("Upload a document", type=FILE_TYPES)
+        sensitive = st.checkbox(
+            "🔒 Sensitive mode",
+            help="For offer letters, agreements, statements: names, IDs, phone numbers etc. are replaced "
+            "with placeholders on this computer before anything is sent to the AI. Leave off for books.",
+        )
         if st.form_submit_button("Upload", width="stretch") and uploaded:
-            body, error = api("POST", "/documents", files={"file": (uploaded.name, uploaded.getvalue())})
+            body, error = api(
+                "POST",
+                "/documents",
+                files={"file": (uploaded.name, uploaded.getvalue())},
+                data={"sensitive": str(sensitive).lower()},
+            )
             if error:
                 st.error(error)
             else:
@@ -67,7 +77,9 @@ with st.sidebar:
         "Your documents",
         ids,
         key="selected",
-        format_func=lambda i: f"{STATUS_ICON.get(by_id[i]['status'], '')} {by_id[i]['filename']}",
+        format_func=lambda i: (
+            f"{STATUS_ICON.get(by_id[i]['status'], '')} {'🔒 ' if by_id[i]['sensitive'] else ''}{by_id[i]['filename']}"
+        ),
     )
 
 
@@ -102,8 +114,15 @@ def status_panel(doc_id: int):
 
 
 doc = by_id[selected]
-st.header(doc["title"] or doc["filename"])
+st.header(
+    ("🔒 " if doc["sensitive"] else "") + (doc["filename"] if doc["sensitive"] else doc["title"] or doc["filename"])
+)
 status_panel(selected)
+show_redacted = doc["sensitive"] and st.toggle(
+    "Show what the AI saw (placeholders instead of real values)",
+    help="In sensitive mode the AI only ever receives placeholders like [PERSON_1]; real values are "
+    "put back on this computer just before showing you the answer.",
+)
 
 chat_tab, map_tab, manage_tab = st.tabs(["💬 Chat", "🗺️ Document map", "⚙️ Manage"])
 
@@ -111,18 +130,24 @@ with chat_tab:
     history = st.session_state.setdefault("chats", {}).setdefault(selected, [])
     for message in history:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            redacted_view = show_redacted and message.get("answer_redacted")
+            st.markdown(message["answer_redacted"] if redacted_view else message["content"])
             if message["role"] == "assistant":
                 if message.get("route"):
                     st.caption(f"Route: {ROUTE_LABEL.get(message['route'], message['route'])}")
                 for c in message.get("citations", []):
                     with st.expander(f"📎 {c['source']}, {c['loc']}"):
-                        st.write(c["text"])
+                        st.write(c.get("text_redacted", c["text"]) if show_redacted else c["text"])
                 if message.get("sources"):
                     with st.expander(f"All {len(message['sources'])} excerpts the AI was shown"):
                         for s in message["sources"]:
                             st.markdown(f"**{s['loc']}** ({s['kind'].replace('_', ' ')})")
-                            st.write(s["text"])
+                            st.write(s.get("text_redacted", s["text"]) if show_redacted else s["text"])
+                if message.get("llm_payload"):
+                    with st.expander("🔍 What was sent to the AI (exact request)"):
+                        for m in message["llm_payload"]:
+                            st.markdown(f"**{m['role']}**")
+                            st.code(m["content"], language=None, wrap_lines=True)
 
     if doc["status"] != "ready":
         st.chat_input("The document isn't ready yet", disabled=True)
@@ -140,12 +165,14 @@ with chat_tab:
                     "route": answer["route"],
                     "citations": answer["citations"],
                     "sources": answer["sources"],
+                    "answer_redacted": answer.get("answer_redacted"),
+                    "llm_payload": answer.get("llm_payload"),
                 }
             )
         st.rerun()
 
 with map_tab:
-    docmap, error = api("GET", f"/documents/{selected}/map")
+    docmap, error = api("GET", f"/documents/{selected}/map", params={"redacted": str(show_redacted).lower()})
     if error:
         st.error(error)
     else:
@@ -160,6 +187,13 @@ with map_tab:
         if docmap["summary"]:
             st.subheader("Overview")
             st.write(docmap["summary"])
+            name = doc["filename"].rsplit(".", 1)[0]
+            if doc["sensitive"]:
+                safe, _ = api("GET", f"/documents/{selected}/map", params={"redacted": "true"})
+                st.download_button(
+                    "⬇️ Summary with placeholders (safe to share)", safe["summary"], f"{name}-summary-redacted.txt"
+                )
+            st.download_button("⬇️ Summary", docmap["summary"], f"{name}-summary.txt")
         if docmap["entities"]:
             st.subheader("Characters & entities")
             st.dataframe(
@@ -184,7 +218,28 @@ with map_tab:
 
 with manage_tab:
     st.write(f"**File:** {doc['filename']} · **Type:** {doc['file_type']} · **Uploaded:** {doc['created_at'][:16]}")
-    st.write("Deleting removes the document's text, embeddings, summaries, entities and question log.")
+    if doc["sensitive"] and doc["status"] == "ready":
+        report, error = api("GET", f"/documents/{selected}/pii-report")
+        st.subheader("🔒 Personal data found (hidden from the AI)")
+        if error:
+            st.error(error)
+        elif not report["types"]:
+            st.info("No personal data was detected.")
+        else:
+            st.dataframe(
+                [
+                    {"Type": t["type"], "Different values": t["distinct"], "Times it appears": t["occurrences"],
+                     "Where": ", ".join(t["where"])}
+                    for t in report["types"]
+                ],
+                width="stretch",
+                hide_index=True,
+            )  # fmt: skip
+            st.caption(
+                "Detection is best-effort: unusual formats, nicknames or addresses can slip through. "
+                "Before every request the tripwire re-checks for these values and blocks anything that leaks."
+            )
+    st.write("Deleting removes the document's text, embeddings, summaries, entities, PII vault and question log.")
     confirm = st.checkbox("Yes, delete this document permanently")
     if st.button("🗑️ Delete document", type="primary", disabled=not confirm):
         _, error = api("DELETE", f"/documents/{selected}")

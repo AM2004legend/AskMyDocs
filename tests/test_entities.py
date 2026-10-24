@@ -36,6 +36,11 @@ def test_junk_is_dropped_and_kinds_normalised():
     assert merged == {"Acme Corp": "organisation", "Paris": "place"}
 
 
+def test_id_placeholders_are_not_entities():
+    raw = [(1, e("[ACCOUNT_1]", kind="other")), (1, e("[PHONE_2]")), (1, e("[PERSON_1]"))]
+    assert [m.name for m in merge_entities(raw)] == ["[PERSON_1]"]
+
+
 def test_apply_groups_from_llm():
     entities = merge_entities([(1, e("Elizabeth Bennet")), (2, e("Eliza")), (3, e("Mr. Darcy"))])
     names = [x.name for x in entities]
