@@ -1,3 +1,5 @@
+# Local dev:   docker compose up -d db            (just Postgres; run the app from your venv)
+# Everything:  docker compose up --build          (db + api on :8000 + ui on :8501)
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -14,6 +16,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build: .
+    image: askmydocs
+    env_file:
+      - path: .env       # your LLM keys; optional, the app still runs (search + refusal) without them
+        required: false
+    environment:
+      DATABASE_URL: postgresql://askmydocs:askmydocs@db:5432/askmydocs  # "db" = the service above
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ui:
+    image: askmydocs
+    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501",
+              "--server.headless=true", "--browser.gatherUsageStats=false"]
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
 
 volumes:
   pgdata:
