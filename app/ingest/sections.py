@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 
 from app.ingest.parsers import Block
 
-MIN_SECTION_WORDS = 50
+# Sections with fewer words than this are folded into the next one. It exists for table-of-contents
+# lines ("Chapter 1", "Chapter 2" with no text). 50 was too high: it merged short contract clauses
+# ("7. NOTICE PERIOD", ~40 words) into the next clause, so citations pointed at the wrong clause.
+MIN_SECTION_WORDS = 15
 FALLBACK_PAGES = 10
 FALLBACK_WORDS = 3000
 

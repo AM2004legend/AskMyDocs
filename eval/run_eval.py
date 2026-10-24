@@ -44,7 +44,9 @@ def find_documents(names: set[str]) -> dict[str, int]:
     found = {r["filename"]: r["id"] for r in rows if r["status"] == "ready"}
     missing = names - found.keys()
     if missing:
-        sys.exit(f"Upload these documents first (and wait until ready): {', '.join(sorted(missing))}")
+        print(f"Skipping questions for documents not uploaded/ready yet: {', '.join(sorted(missing))}\n")
+    if not found:
+        sys.exit("None of the eval documents are uploaded yet.")
     return found
 
 
@@ -75,12 +77,14 @@ def main() -> None:
     parser.add_argument("--answers", action="store_true", help="generate answers with the LLM")
     parser.add_argument("--grade", action="store_true", help="LLM-grade answers (implies --answers)")
     parser.add_argument("--label", default="", help="name for this run, e.g. 'baseline' or 'docmap'")
+    parser.add_argument("--document", default="", help="only questions for this filename")
     args = parser.parse_args()
     args.answers = args.answers or args.grade
 
     spec = yaml.safe_load(Path(args.questions).read_text(encoding="utf-8"))
-    questions = spec["questions"]
+    questions = [q for q in spec["questions"] if not args.document or q["document"] == args.document]
     doc_ids = find_documents({q["document"] for q in questions})
+    questions = [q for q in questions if q["document"] in doc_ids]
 
     results = []
     for q in questions:
@@ -108,7 +112,10 @@ def main() -> None:
         row["latency_ms"] = int((time.perf_counter() - started) * 1000)
         results.append(row)
         flag = "OK " if row["refusal_ok"] and row["route_ok"] is not False and row["hit"] is not False else "!! "
-        print(f"{flag}{q['id']:<7} route={row['route']:<15} hit={row['hit']!s:<5} refused={row['refused']!s:<5} {q['question']}")
+        print(
+            f"{flag}{q['id']:<7} route={row['route']:<15} hit={row['hit']!s:<5} "
+            f"refused={row['refused']!s:<5} {q['question']}"
+        )
 
     print("\n| type | n | route ok | retrieval hit | refusal ok | correct | avg latency |")
     print("|---|---|---|---|---|---|---|")

@@ -37,6 +37,16 @@ def test_router_entities_by_name_and_alias():
     assert r.kind == ENTITY and sorted(r.entity_ids) == [1, 2]
 
 
+def test_factual_question_that_names_someone_stays_specific():
+    assert route_question("How much money a year does Mr. Darcy have?", ENTITIES).kind == SPECIFIC
+    assert route_question("Who is Lizzy?", ENTITIES).kind == ENTITY
+    assert route_question("What is the relationship between Mr. Darcy and Lizzy?", ENTITIES).kind == ENTITY
+
+
+def test_router_story_ending_is_whole_document():
+    assert route_question("How does the story end?").kind == WHOLE_DOCUMENT
+
+
 def test_router_entity_list_questions():
     r = route_question("List the main characters", ENTITIES)
     assert r.kind == ENTITY and r.entity_ids == []

@@ -17,7 +17,15 @@ WHOLE_RE = re.compile(
     r"|main (themes?|ideas?|points?|arguments?|message|plot)|key (points|takeaways|themes|ideas)"
     r"|themes?|plot|storyline"
     r"|what (is|was) (this|the) (book|document|story|novel|text|paper|chapter|agreement|contract) about"
-    r"|what happens in)\b",
+    r"|what happens in|how does (it|the (story|book|novel)) (end|finish)|ending)\b",
+    re.IGNORECASE,
+)
+# A question is ABOUT a person/organisation (not just mentioning one) when it asks who they are,
+# what they are like, or how they relate to / feel about someone.
+ENTITY_INTENT_RE = re.compile(
+    r"\b(who (is|was|are|were)|tell me about|describe|relationship|relation between|role of|character of"
+    r"|what (kind|sort) of (person|man|woman)|opinion of|feel(s|ings)? (about|for|towards)|think of"
+    r"|how does .{1,40} change)\b",
     re.IGNORECASE,
 )
 ENTITY_LIST_RE = re.compile(
@@ -58,7 +66,10 @@ def match_entities(question: str, entity_names: dict[int, set[str]]) -> list[int
 def route_question(question: str, entity_names: dict[int, set[str]] | None = None) -> Route:
     section_number = find_section_number(question)
     matched = match_entities(question, entity_names or {})
-    if matched:
+    # Only questions ABOUT someone use the entity index. Measured on the eval set: sending every
+    # question that merely names a character ("How much money does Mr. Bingley have?") to the entity
+    # route dropped specific retrieval from 20% to 0%, because in a novel almost every question has a name.
+    if matched and ENTITY_INTENT_RE.search(question):
         return Route(ENTITY, entity_ids=matched, section_number=section_number)
     if WHOLE_RE.search(question):
         return Route(WHOLE_DOCUMENT, section_number=section_number)

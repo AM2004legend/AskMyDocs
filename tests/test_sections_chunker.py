@@ -35,6 +35,15 @@ def test_split_by_regex_headings_and_merge_toc_lines():
     assert "Contents" in sections[0].text  # tiny TOC sections folded forward, nothing lost
 
 
+def test_short_contract_clauses_are_not_merged():
+    blocks = []
+    for n, title in enumerate(["PARTIES", "PROPERTY", "NOTICE PERIOD"], start=1):
+        blocks += [Block(f"{n}. {title}"), Block(words(30, title.lower().split()[0]))]
+    sections = split_sections(blocks)
+    assert [s.title for s in sections] == ["1. PARTIES", "2. PROPERTY", "3. NOTICE PERIOD"]
+    assert section_labels(sections) == ["ch.1", "ch.2", "ch.3"]
+
+
 def test_labels_use_real_chapter_numbers():
     blocks = [Block("Preface"), Block(words(60)), Block("CHAPTER I."), Block(words(60)), Block("CHAPTER II.")]
     blocks += [Block(words(60))]
