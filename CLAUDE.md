@@ -97,11 +97,15 @@ docs/PRD.md
 ## Useful commands
 - `.venv\Scripts\Activate.ps1`
 - `pip install -r requirements-dev.txt`
-- `docker compose up -d db` (Postgres on localhost:5433)
+- `docker compose up -d db` (Postgres on localhost:5433) · `docker compose up --build` (whole stack)
 - `uvicorn app.main:app --reload`
 - `streamlit run ui/streamlit_app.py`
 - `pytest` (uses a separate `askmydocs_test` DB; LLM always faked) · `pytest -m "not slow"` for quick runs
-- `ruff check .` · `ruff format .` · `python eval/run_eval.py`
+- `ruff check .` · `ruff format .` · `python eval/run_eval.py` · `python eval/pii_recall.py`
+
+## Free-tier facts (measured 2026-10-24; re-check if behaviour changes)
+- Gemini free: ~20 requests/day per model; `gemini-2.5-flash` is closed to new users.
+- Groq free: 1000 requests/day, 8000 tokens/minute; gpt-oss needs `reasoning_effort=low`.
 
 ## Git
 - Commit after each phase. Never add Claude as co-author / contributor (no trailers).
